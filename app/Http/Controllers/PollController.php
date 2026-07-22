@@ -7,8 +7,18 @@ use App\Services\PollRanking;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+/**
+ * Controller para gerenciamento de votações.
+ */
 class PollController extends Controller
 {
+    /**
+     * Exibe a lista de votações com prévia do ranking.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Services\PollRanking  $ranking
+     * @return \Illuminate\View\View
+     */
     public function index(Request $request, PollRanking $ranking): View
     {
         $user = $request->user();
@@ -32,6 +42,13 @@ class PollController extends Controller
         ]);
     }
 
+    /**
+     * Exibe os detalhes de uma votação específica.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Poll  $poll
+     * @return \Illuminate\View\View
+     */
     public function show(Request $request, Poll $poll): View
     {
         $poll->load('items');
@@ -42,11 +59,57 @@ class PollController extends Controller
         ]);
     }
 
+    /**
+     * Exibe os resultados/ranking de uma votação.
+     *
+     * @param  \App\Models\Poll  $poll
+     * @param  \App\Services\PollRanking  $ranking
+     * @return \Illuminate\View\View
+     */
     public function results(Poll $poll, PollRanking $ranking): View
     {
         return view('polls.results', [
             'poll' => $poll,
             'ranking' => $ranking->for($poll),
+        ]);
+    }
+
+    /**
+     * API endpoint para obter ranking em tempo real.
+     *
+     * @param  \App\Models\Poll  $poll
+     * @param  \App\Services\PollRanking  $ranking
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function ranking(Poll $poll, PollRanking $ranking)
+    {
+        return response()->json([
+            'ranking' => $ranking->for($poll)->take(3),
+            'votes_count' => $poll->votes()->count(),
+        ]);
+    }
+
+    /**
+     * API endpoint público para obter pódio da live (sem autenticação).
+     *
+     * @param  \App\Services\PollRanking  $ranking
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function livePodium(PollRanking $ranking)
+    {
+        $livePoll = Poll::open()->first();
+
+        if (!$livePoll) {
+            return response()->json([
+                'ranking' => [],
+                'poll_id' => null,
+            ]);
+        }
+
+        return response()->json([
+            'ranking' => $ranking->for($livePoll)->take(3),
+            'poll_id' => $livePoll->id,
+            'votes_count' => $livePoll->votes()->count(),
         ]);
     }
 }

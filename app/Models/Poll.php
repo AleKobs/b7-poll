@@ -2,15 +2,20 @@
 
 namespace App\Models;
 
+use App\Enums\PollStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * Model representando uma votação.
+ */
 class Poll extends Model
 {
     /** @use HasFactory<\Database\Factories\PollFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'title',
@@ -20,49 +25,88 @@ class Poll extends Model
         'expires_at',
     ];
 
+    protected $attributes = [
+        'podium_size' => 3,
+        'status' => PollStatus::ACTIVE->value,
+    ];
+
+    /**
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [
             'podium_size' => 'integer',
             'expires_at' => 'datetime',
+            'status' => PollStatus::class,
         ];
     }
 
-    /** @return HasMany<PollItem, $this> */
+    /**
+     * Relacionamento com os itens da votação.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<PollItem, $this>
+     */
     public function items(): HasMany
     {
         return $this->hasMany(PollItem::class);
     }
 
-    /** @return HasMany<Vote, $this> */
+    /**
+     * Relacionamento com os votos da votação.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<Vote, $this>
+     */
     public function votes(): HasMany
     {
         return $this->hasMany(Vote::class);
     }
 
-    /** Votações que aceitam votos: ativas e não expiradas. */
+    /**
+     * Scope para votações que aceitam votos: ativas e não expiradas.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<Poll>  $query
+     * @return void
+     */
     public function scopeOpen(Builder $query): void
     {
-        $query->where('status', 'active')->where('expires_at', '>', now());
+        $query->where('status', PollStatus::ACTIVE)->where('expires_at', '>', now());
     }
 
-    /** Votações finalizadas: inativas ou expiradas. */
+    /**
+     * Scope para votações finalizadas: inativas ou expiradas.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<Poll>  $query
+     * @return void
+     */
     public function scopeFinished(Builder $query): void
     {
         $query->where(function (Builder $q) {
-            $q->where('status', 'inactive')->orWhere('expires_at', '<=', now());
+            $q->where('status', PollStatus::INACTIVE)->orWhere('expires_at', '<=', now());
         });
     }
 
-    /** Se a votação aceita votos agora. */
+    /**
+     * Verifica se a votação aceita votos agora.
+     *
+     * @return bool
+     */
     public function isOpen(): bool
     {
-        return $this->status === 'active' && $this->expires_at->isFuture();
+        return $this->status === PollStatus::ACTIVE && $this->expires_at->isFuture();
     }
 
-    /** Pontos que uma posição do pódio vale nesta votação. */
+    /**
+     * Calcula os pontos que uma posição do pódio vale nesta votação.
+     *
+     * @param  int  $position
+     * @return int
+     */
     public function pointsForPosition(int $position): int
     {
-        return 2 * ($this->podium_size - $position) + 1;
+        $multiplier = 2;
+        $base = 1;
+
+        return $multiplier * ($this->podium_size - $position) + $base;
     }
 }
