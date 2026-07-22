@@ -1,7 +1,7 @@
 <x-layouts.premium title="Votações da Live">
     <section class="page-heading" aria-labelledby="page-title">
       <div>
-        <p class="eyebrow">Live B7Web</p>
+        <p class="eyebrow">Encontro B7Web</p>
         <h1 id="page-title">Votações da Live</h1>
         <p class="lead">Vote nos projetos favoritos e acompanhe o pódio em tempo real.</p>
       </div>
