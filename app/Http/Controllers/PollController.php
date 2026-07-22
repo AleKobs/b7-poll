@@ -71,6 +71,7 @@ class PollController extends Controller
         return view('polls.results', [
             'poll' => $poll,
             'ranking' => $ranking->for($poll),
+            'votesCount' => $poll->votes()->count(),
         ]);
     }
 
