@@ -1,172 +1,63 @@
-@extends('layouts.app')
+@php($isOpen = $poll->isOpen())
 
-@section('title', $poll->title)
+<x-layouts.premium :title="$poll->title">
+    @push('scripts')
+        <script src="{{ asset('assets/premium-home/ballot.js') }}" defer></script>
+    @endpush
 
-@push('styles')
-<style>
-    .loading-spinner {
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        border: 2px solid rgba(255,255,255,0.3);
-        border-radius: 50%;
-        border-top-color: #fff;
-        animation: spin 0.8s linear infinite;
-        margin-right: 8px;
-    }
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-    .button-loading {
-        opacity: 0.7;
-        pointer-events: none;
-    }
-    .toast {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        padding: 16px 24px;
-        border-radius: 8px;
-        background: #fff;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 1000;
-        animation: slideIn 0.3s ease;
-        max-width: 350px;
-    }
-    .toast.success { border-left: 4px solid #18a058; }
-    .toast.error { border-left: 4px solid #c0392b; }
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-    @keyframes slideOut {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
-    }
-</style>
-@endpush
+    <section class="page-heading page-heading--tight" aria-labelledby="page-title">
+        <div>
+            <a class="back-link focus-ring" href="{{ route('polls.index') }}">← Votações</a>
 
-@section('content')
-    <p><a href="{{ route('polls.index') }}">← Votações</a></p>
+            <div class="status-row">
+                @if ($isOpen)
+                    <x-ui.pill tone="open">Aberta</x-ui.pill>
+                @else
+                    <x-ui.pill tone="finished">Finalizada</x-ui.pill>
+                @endif
+                <x-ui.pill icon="trophy">Pódio de {{ $poll->podium_size }}</x-ui.pill>
+                <x-ui.pill icon="clock">
+                    {{ $isOpen
+                        ? 'Encerra '.$poll->expires_at->format('d/m \à\s H:i')
+                        : 'Encerrada em '.$poll->expires_at->format('d/m \à\s H:i') }}
+                </x-ui.pill>
+            </div>
 
-    <div class="card">
-        <h1>{{ $poll->title }}</h1>
-        @if ($poll->description)
-            <p>{{ $poll->description }}</p>
-        @endif
-        <p class="muted">
-            Pódio de {{ $poll->podium_size }} lugares ·
-            {{ $poll->isOpen() ? 'encerra '.$poll->expires_at->format('d/m/Y H:i') : 'finalizada' }}
-        </p>
-    </div>
+            <h1 id="page-title">{{ $poll->title }}</h1>
 
-    @if ($poll->isOpen() && ! $alreadyVoted)
-        <div class="card">
-            <h2>Seu voto</h2>
-
-            @include('partials.errors')
-
-            <form method="POST" action="{{ route('polls.vote', $poll) }}" id="voteForm">
-                @csrf
-
-                @for ($position = 1; $position <= $poll->podium_size; $position++)
-                    <label for="position-{{ $position }}">
-                        {{ $position }}º lugar ({{ $poll->pointsForPosition($position) }} pts)
-                    </label>
-                    <select id="position-{{ $position }}" name="items[{{ $position }}]" required class="vote-select">
-                        <option value="">— selecione —</option>
-                        @foreach ($poll->items as $item)
-                            <option value="{{ $item->id }}" @selected(old("items.$position") == $item->id)>
-                                {{ $item->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                @endfor
-
-                <button type="submit" id="submitBtn">Enviar voto</button>
-            </form>
-        </div>
-    @else
-        <div class="card">
-            @if ($alreadyVoted)
-                <p>Você já votou nesta votação.</p>
-            @else
-                <p>Esta votação está finalizada.</p>
+            @if ($poll->description)
+                <p class="lead">{{ $poll->description }}</p>
             @endif
-            <a href="{{ route('polls.results', $poll) }}">Ver resultados</a>
+        </div>
+    </section>
+
+    @if ($isOpen && ! $alreadyVoted)
+        @if ($errors->any())
+            <x-ui.alert>
+                <ul>
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </x-ui.alert>
+        @endif
+
+        <x-poll.ballot :poll="$poll" />
+    @else
+        <div class="side-panel notice-panel">
+            <img src="{{ asset('assets/premium-home/'.($alreadyVoted ? 'check' : 'results').'.svg') }}" alt="">
+            <div>
+                <h2>{{ $alreadyVoted ? 'Você já votou nesta votação' : 'Esta votação está finalizada' }}</h2>
+                <p>
+                    {{ $alreadyVoted
+                        ? 'Cada participante vota uma vez por votação. Acompanhe o pódio ao vivo.'
+                        : 'O período de votação terminou. Confira como ficou o pódio final.' }}
+                </p>
+                <div class="card-actions">
+                    <x-ui.button variant="primary" :href="route('polls.results', $poll)">Ver resultados</x-ui.button>
+                    <x-ui.button :href="route('polls.index')">Voltar às votações</x-ui.button>
+                </div>
+            </div>
         </div>
     @endif
-
-    @if(session('status'))
-        <div id="toast" class="toast success">
-            {{ session('status') }}
-        </div>
-    @endif
-@endsection
-
-@push('scripts')
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById('voteForm');
-        const submitBtn = document.getElementById('submitBtn');
-        const selects = document.querySelectorAll('.vote-select');
-        const toast = document.getElementById('toast');
-
-        // Client-side validation
-        form.addEventListener('submit', function(e) {
-            const selectedValues = [];
-            let hasDuplicates = false;
-            let hasEmpty = false;
-
-            selects.forEach(select => {
-                const value = select.value;
-                if (!value) {
-                    hasEmpty = true;
-                } else if (selectedValues.includes(value)) {
-                    hasDuplicates = true;
-                }
-                selectedValues.push(value);
-            });
-
-            if (hasEmpty) {
-                e.preventDefault();
-                showToast('Por favor, selecione um item para cada posição.', 'error');
-                return;
-            }
-
-            if (hasDuplicates) {
-                e.preventDefault();
-                showToast('Um mesmo item não pode ocupar mais de uma posição.', 'error');
-                return;
-            }
-
-            // Show loading state
-            submitBtn.classList.add('button-loading');
-            submitBtn.innerHTML = '<span class="loading-spinner"></span> Enviando...';
-        });
-
-        // Auto-hide toast
-        if (toast) {
-            setTimeout(() => {
-                toast.style.animation = 'slideOut 0.3s ease forwards';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
-        }
-
-        function showToast(message, type = 'success') {
-            const existingToast = document.querySelector('.toast');
-            if (existingToast) existingToast.remove();
-
-            const newToast = document.createElement('div');
-            newToast.className = `toast ${type}`;
-            newToast.textContent = message;
-            document.body.appendChild(newToast);
-
-            setTimeout(() => {
-                newToast.style.animation = 'slideOut 0.3s ease forwards';
-                setTimeout(() => newToast.remove(), 300);
-            }, 4000);
-        }
-    });
-</script>
-@endpush
+</x-layouts.premium>

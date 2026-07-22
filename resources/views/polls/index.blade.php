@@ -1,37 +1,4 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>B7Web Votações</title>
-  <link rel="stylesheet" href="{{ asset('assets/premium-home/home.css') }}">
-</head>
-<body>
-  <header class="topbar">
-    <div class="nav-shell">
-      <a class="brand focus-ring" href="{{ route('polls.index') }}" aria-label="B7Web Votações">
-        <img src="{{ asset('assets/premium-home/brand-mark.svg') }}" alt="">
-        <span>B7Web Votações</span>
-      </a>
-
-      <nav class="nav-links" aria-label="Principal">
-        <a href="{{ route('polls.index') }}" aria-current="page">Votações</a>
-        <a href="#finalizadas">Resultados</a>
-      </nav>
-
-      <div class="user-actions">
-        <span class="hello">Olá, {{ auth()->user()->name }}</span>
-        <form method="POST" action="{{ route('logout') }}">
-          @csrf
-          <button class="icon-button focus-ring" type="submit" aria-label="Sair">
-            <img src="{{ asset('assets/premium-home/logout.svg') }}" alt="">
-          </button>
-        </form>
-      </div>
-    </div>
-  </header>
-
-  <main class="shell">
+<x-layouts.premium title="Votações da Live">
     <section class="page-heading" aria-labelledby="page-title">
       <div>
         <p class="eyebrow">Live B7Web</p>
@@ -74,11 +41,11 @@
               <div>
                 <div class="status-row">
                   @if ($voted)
-                    <span class="pill voted"><img src="{{ asset('assets/premium-home/check.svg') }}" alt="">Você já votou</span>
+                    <x-ui.pill tone="voted" icon="check">Você já votou</x-ui.pill>
                   @else
-                    <span class="pill open">Aberta</span>
+                    <x-ui.pill tone="open">Aberta</x-ui.pill>
                   @endif
-                  <span class="pill"><img src="{{ asset('assets/premium-home/trophy.svg') }}" alt="">Pódio de {{ $poll->podium_size }}</span>
+                  <x-ui.pill icon="trophy">Pódio de {{ $poll->podium_size }}</x-ui.pill>
                 </div>
 
                 <h2 class="poll-title">{{ $poll->title }}</h2>
@@ -97,10 +64,10 @@
 
                 <div class="card-actions">
                   @if ($voted)
-                    <a class="button secondary focus-ring" href="{{ route('polls.results', $poll) }}">Ver resultados</a>
+                    <x-ui.button :href="route('polls.results', $poll)">Ver resultados</x-ui.button>
                   @else
-                    <a class="button primary focus-ring" href="{{ route('polls.show', $poll) }}">Votar</a>
-                    <a class="button secondary focus-ring" href="{{ route('polls.results', $poll) }}">Ver detalhes</a>
+                    <x-ui.button variant="primary" :href="route('polls.show', $poll)">Votar</x-ui.button>
+                    <x-ui.button :href="route('polls.results', $poll)">Ver detalhes</x-ui.button>
                   @endif
                 </div>
               </div>
@@ -117,7 +84,7 @@
                       <li>
                         <span class="rank">{{ $row['rank'] }}</span>
                         @if($row['item']->url)
-                          <a href="{{ $row['item']->url }}" target="_blank" style="color: inherit; text-decoration: none;">{{ $row['item']->name }}</a>
+                          <a href="{{ $row['item']->url }}" target="_blank" rel="noopener noreferrer">{{ $row['item']->name }}</a>
                         @else
                           <span>{{ $row['item']->name }}</span>
                         @endif
@@ -190,44 +157,41 @@
         </section>
       </aside>
     </div>
-  </main>
 
-  <script>
-    // Real-time ranking updates
-    document.addEventListener('DOMContentLoaded', function() {
-      const podiumPanels = document.querySelectorAll('.podium-panel[data-poll-id]');
+    @push('scripts')
+    <script>
+      // Atualização do pódio ao vivo.
+      document.addEventListener('DOMContentLoaded', function() {
+        const podiumPanels = document.querySelectorAll('.podium-panel[data-poll-id]');
 
-      podiumPanels.forEach(panel => {
-        const pollId = panel.getAttribute('data-poll-id');
-        const rankingList = panel.querySelector('.ranking-mini');
+        podiumPanels.forEach(panel => {
+          const pollId = panel.getAttribute('data-poll-id');
+          const rankingList = panel.querySelector('.ranking-mini');
 
-        // Update ranking every 5 seconds
-        setInterval(async () => {
-          try {
-            const response = await fetch(`/polls/${pollId}/ranking`);
-            const data = await response.json();
+          setInterval(async () => {
+            try {
+              const response = await fetch(`/polls/${pollId}/ranking`);
+              const data = await response.json();
 
-            // Update ranking list
-            rankingList.innerHTML = data.ranking.map(row => `
-              <li>
-                <span class="rank">${row.rank}</span>
-                ${row.item.url ? `<a href="${row.item.url}" target="_blank" style="color: inherit; text-decoration: none;">${row.item.name}</a>` : `<span>${row.item.name}</span>`}
-                <span class="score">${row.points} pts</span>
-              </li>
-            `).join('');
+              rankingList.innerHTML = data.ranking.map(row => `
+                <li>
+                  <span class="rank">${row.rank}</span>
+                  ${row.item.url ? `<a href="${row.item.url}" target="_blank" rel="noopener noreferrer">${row.item.name}</a>` : `<span>${row.item.name}</span>`}
+                  <span class="score">${row.points} pts</span>
+                </li>
+              `).join('');
 
-            // Update vote count if visible
-            const voteCountElement = panel.closest('.poll-card').querySelector('.meta-item:last-child span');
-            if (voteCountElement) {
-              const count = data.votes_count;
-              voteCountElement.textContent = `${count} ${count === 1 ? 'voto registrado' : 'votos registrados'}`;
+              const voteCountElement = panel.closest('.poll-card').querySelector('.meta-item:last-child span');
+              if (voteCountElement) {
+                const count = data.votes_count;
+                voteCountElement.textContent = `${count} ${count === 1 ? 'voto registrado' : 'votos registrados'}`;
+              }
+            } catch (error) {
+              console.error('Error fetching ranking:', error);
             }
-          } catch (error) {
-            console.error('Error fetching ranking:', error);
-          }
-        }, 5000); // 5 seconds
+          }, 5000);
+        });
       });
-    });
-  </script>
-</body>
-</html>
+    </script>
+    @endpush
+</x-layouts.premium>

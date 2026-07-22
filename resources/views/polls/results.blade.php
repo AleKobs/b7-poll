@@ -1,70 +1,78 @@
-@extends('layouts.app')
+@php($isOpen = $poll->isOpen())
 
-@section('title', 'Resultados · '.$poll->title)
+<x-layouts.premium :title="'Resultados · '.$poll->title" current="results">
+    <section class="page-heading page-heading--tight" aria-labelledby="page-title">
+        <div>
+            <a class="back-link focus-ring" href="{{ route('polls.index') }}">← Votações</a>
 
-@section('content')
-    <p><a href="{{ route('polls.index') }}">← Votações</a></p>
+            <div class="status-row">
+                @if ($isOpen)
+                    <x-ui.pill tone="open">Parcial ao vivo</x-ui.pill>
+                @else
+                    <x-ui.pill tone="finished">Resultado final</x-ui.pill>
+                @endif
+                <x-ui.pill icon="trophy">Pódio de {{ $poll->podium_size }}</x-ui.pill>
+                <x-ui.pill icon="users">
+                    {{ $votesCount }} {{ $votesCount == 1 ? 'voto' : 'votos' }}
+                </x-ui.pill>
+            </div>
 
-    <div class="card">
-        <h1>🏆 Resultados — {{ $poll->title }}</h1>
-        <p class="muted">Pódio de {{ $poll->podium_size }} · cálculo em tempo real.</p>
+            <h1 id="page-title">{{ $poll->title }}</h1>
+            <p class="lead">
+                {{ $isOpen
+                    ? 'Pontuação recalculada a cada voto. Empates são resolvidos por número de primeiros lugares.'
+                    : 'Votação encerrada em '.$poll->expires_at->format('d/m/Y \à\s H:i').'.' }}
+            </p>
+        </div>
+    </section>
 
-        <div class="poll-meta">
-            <p><strong>Status:</strong> @if($poll->status === \App\Enums\PollStatus::ACTIVE && $poll->expires_at > now()) <span class="badge badge-open">Em andamento</span> @else <span class="badge badge-finished">Finalizada</span> @endif</p>
-            <p><strong>Encerra em:</strong> {{ $poll->expires_at->format('d/m/Y H:i') }}</p>
-            <p><strong>Total de votos:</strong> {{ $poll->votes()->count() }}</p>
+    <div class="side-panel results-panel">
+        <div class="section-head">
+            <div>
+                <h2>Classificação</h2>
+                <p>{{ $poll->podium_size }} primeiros sobem ao pódio.</p>
+            </div>
+            <x-ui.button data-share>Compartilhar</x-ui.button>
         </div>
 
-        <ul class="podium">
-            @foreach ($ranking as $index => $row)
-                <li>
-                    <span class="rank rank-{{ $index + 1 }}">
-                        @if($index === 0) 🥇
-                        @elseif($index === 1) 🥈
-                        @elseif($index === 2) 🥉
-                        @else {{ $index + 1 }}
-                        @endif
-                    </span>
-                    @if($row['item']->url)
-                        <strong><a href="{{ $row['item']->url }}" target="_blank" style="color: inherit; text-decoration: none;">{{ $row['item']->name }}</a></strong>
-                    @else
-                        <strong>{{ $row['item']->name }}</strong>
-                    @endif
-                    <span class="points">{{ $row['points'] }} pts</span>
-                    @if (! empty($row['counts']))
-                        <span class="counts">
-                            (@foreach ($row['counts'] as $position => $times){{ $position }}º×{{ $times }}@if (! $loop->last), @endif @endforeach)
-                        </span>
-                    @endif
-                </li>
-            @endforeach
-        </ul>
-
         @if ($ranking->isEmpty())
-            <p class="muted">Esta votação ainda não tem itens.</p>
+            <p class="empty-note">Esta votação ainda não tem itens.</p>
+        @else
+            <x-poll.ranking-list :ranking="$ranking" />
         @endif
-
-        <button class="share-btn" onclick="shareResults()">📤 Compartilhar Resultados</button>
     </div>
 
-    <script>
-        function shareResults() {
-            const text = '🏆 Resultados da votação: {{ $poll->title }}\n\n' +
-                '@foreach($ranking->take(3) as $index => $row)' +
-                '@if($index === 0)🥇 @elseif($index === 1)🥈 @elseif($index === 2)🥉 @else{{ $index + 1 }}. @endif{{ $row['item']->name }} - {{ $row['points'] }} pts\n' +
-                '@endforeach';
-            
-            if (navigator.share) {
-                navigator.share({
-                    title: 'Resultados: {{ $poll->title }}',
-                    text: text,
-                    url: window.location.href
+    @push('scripts')
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const trigger = document.querySelector('[data-share]');
+
+                if (! trigger) {
+                    return;
+                }
+
+                const lines = @json($ranking->take(3)->map(fn ($row) => $row['rank'].'º '.$row['item']->name.' — '.$row['points'].' pts')->values());
+                const text = @json('Resultados: '.$poll->title)+'\n\n'+lines.join('\n');
+
+                trigger.addEventListener('click', async () => {
+                    const payload = { title: @json($poll->title), text, url: window.location.href };
+
+                    if (navigator.share) {
+                        try {
+                            await navigator.share(payload);
+                            return;
+                        } catch (error) {
+                            if (error.name === 'AbortError') {
+                                return;
+                            }
+                        }
+                    }
+
+                    await navigator.clipboard.writeText(text+'\n'+window.location.href);
+                    trigger.textContent = 'Copiado!';
+                    setTimeout(() => { trigger.textContent = 'Compartilhar'; }, 2000);
                 });
-            } else {
-                navigator.clipboard.writeText(text).then(() => {
-                    alert('Resultados copiados para a área de transferência!');
-                });
-            }
-        }
-    </script>
-@endsection
+            });
+        </script>
+    @endpush
+</x-layouts.premium>
